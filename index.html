@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#146b4b" />
+    <title>高爾夫同組競技紀錄</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23146b4b'/%3E%3Ccircle cx='32' cy='27' r='12' fill='white'/%3E%3Cpath d='M30 39h4v18h-4z' fill='white'/%3E%3C/svg%3E"
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Golf Match PWA</p>
+          <h1>同組競技紀錄</h1>
+        </div>
+        <button class="icon-button" id="resetRound" type="button" aria-label="清除本場資料" title="清除本場資料">
+          <span aria-hidden="true">↺</span>
+        </button>
+      </header>
+
+      <nav class="tabs" aria-label="主要頁籤">
+        <button class="tab is-active" data-view="setup" type="button">設定</button>
+        <button class="tab" data-view="score" type="button">計分</button>
+        <button class="tab" data-view="games" type="button">遊戲</button>
+        <button class="tab" data-view="summary" type="button">結算</button>
+      </nav>
+
+      <section class="view is-active" id="view-setup">
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>球員</h2>
+            <span id="playerCountLabel">4 人</span>
+          </div>
+          <div class="player-grid" id="playerInputs"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>球場與路線</h2>
+            <span id="courseMeta"></span>
+          </div>
+          <label class="field">
+            <span>球場</span>
+            <select id="courseSelect"></select>
+          </label>
+          <div class="route-picker" id="routePicker"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>計分方式</h2>
+          </div>
+          <div class="handicap-list" id="handicapList"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-score">
+        <section class="hole-control">
+          <button class="round-button" id="prevHole" type="button" aria-label="上一洞">‹</button>
+          <div>
+            <p class="eyebrow">目前球洞</p>
+            <h2 id="holeTitle">第 1 洞</h2>
+            <p id="holeInfo">Par 4 · 380Y</p>
+          </div>
+          <button class="round-button" id="nextHole" type="button" aria-label="下一洞">›</button>
+        </section>
+
+        <section class="section-block compact">
+          <div class="section-heading">
+            <h2>本洞桿數</h2>
+            <button class="ghost-button" id="parFill" type="button">套用標準桿</button>
+          </div>
+          <div class="score-counters" id="scoreCounters"></div>
+        </section>
+
+        <section class="section-block score-scroll">
+          <div class="section-heading sticky-heading">
+            <h2>18 洞計分板</h2>
+            <span id="grossLeader"></span>
+          </div>
+          <div class="score-table-wrap">
+            <table class="score-table" id="scoreTable"></table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-games">
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>逐洞賽看板</h2>
+            <select id="skinsMode" aria-label="逐洞賽計算方式">
+              <option value="gross">總桿</option>
+              <option value="net">淨桿</option>
+            </select>
+          </div>
+          <div class="leaderboard" id="skinsBoard"></div>
+          <div class="zero-check" id="skinsZero">目前已結算總和：0</div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>抓蛇</h2>
+            <strong id="snakeBank">目前全隊累積小蛇：0 條</strong>
+          </div>
+          <div class="snake-tools">
+            <label class="field">
+              <span>第幾隻小蛇變大蛇</span>
+              <select id="snakeTrigger">
+                <option value="2">第 2 隻</option>
+                <option value="3">第 3 隻</option>
+                <option value="4">第 4 隻</option>
+              </select>
+            </label>
+            <button class="ghost-button" id="undoSnake" type="button">回上一步</button>
+          </div>
+          <div class="snake-meter" id="snakeMeter"></div>
+          <div class="snake-actions" id="snakeActions"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>奧林匹克</h2>
+            <span>本洞加減點</span>
+          </div>
+          <div class="olympic-list" id="olympicList"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-summary">
+        <section class="summary-hero">
+          <div>
+            <p class="eyebrow">結算</p>
+            <h2 id="summaryCourse">完整 18 洞賽事</h2>
+          </div>
+          <button class="primary-button" id="exportJson" type="button">匯出 JSON</button>
+        </section>
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>總成績</h2>
+          </div>
+          <div class="summary-list" id="summaryList"></div>
+        </section>
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>遊戲結算</h2>
+          </div>
+          <div class="settlement-grid" id="settlementGrid"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="counterTemplate">
+      <article class="counter-card">
+        <div>
+          <h3></h3>
+          <p></p>
+        </div>
+        <div class="stepper">
+          <button type="button" data-delta="-1" aria-label="減一">−</button>
+          <output></output>
+          <button type="button" data-delta="1" aria-label="加一">+</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

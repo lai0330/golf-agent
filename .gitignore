@@ -1,0 +1,5 @@
+.DS_Store
+.pagedrop-deploy.json
+.playwright-cli/
+output/
+*.zip

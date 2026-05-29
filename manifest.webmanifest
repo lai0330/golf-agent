@@ -1,0 +1,15 @@
+{
+  "name": "高爾夫同組競技紀錄",
+  "short_name": "Golf Match",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f7f1",
+  "theme_color": "#146b4b",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%23146b4b'/%3E%3Ccircle cx='96' cy='82' r='34' fill='white'/%3E%3Cpath d='M94 112h8v54h-8z' fill='white'/%3E%3Cpath d='M102 124l48 16-48 16z' fill='%23f2c14e'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
