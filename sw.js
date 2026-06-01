@@ -1,4 +1,4 @@
-const CACHE_NAME = "golf-agent-v3";
+const CACHE_NAME = "golf-agent-v4";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

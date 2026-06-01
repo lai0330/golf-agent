@@ -439,6 +439,7 @@ function renderScore() {
     }));
   });
 
+  renderOlympic();
   renderScoreTable();
 }
 
@@ -499,6 +500,10 @@ function renderGames() {
     snakeActions.append(button);
   });
 
+  renderSideGame();
+}
+
+function renderOlympic() {
   const olympic = $("#olympicList");
   olympic.innerHTML = "";
   activePlayers().forEach((player) => {
@@ -517,7 +522,6 @@ function renderGames() {
     });
     olympic.append(card);
   });
-  renderSideGame();
 }
 
 function renderSummary() {
@@ -744,7 +748,10 @@ function counterCard(name, detail, value, onChange) {
   const node = $("#counterTemplate").content.firstElementChild.cloneNode(true);
   node.querySelector("h3").textContent = name;
   node.querySelector("p").textContent = detail;
-  node.querySelector("output").textContent = value || 0;
+  const input = node.querySelector("input");
+  input.value = value || 0;
+  input.addEventListener("change", () => onChange(Number(input.value) || 0));
+  input.addEventListener("focus", () => input.select());
   node.querySelectorAll("button").forEach((button) => {
     button.addEventListener("click", () => onChange((value || 0) + Number(button.dataset.delta)));
   });

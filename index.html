@@ -125,6 +125,14 @@
           <div class="score-counters" id="scoreCounters"></div>
         </section>
 
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>奧林匹克</h2>
+            <span>本洞獎牌</span>
+          </div>
+          <div class="olympic-list" id="olympicList"></div>
+        </section>
+
         <section class="section-block score-scroll">
           <div class="section-heading sticky-heading">
             <h2>18 洞計分板</h2>
@@ -165,15 +173,6 @@
           <div class="snake-meter" id="snakeMeter"></div>
           <div class="snake-actions" id="snakeActions"></div>
         </section>
-
-        <section class="section-block">
-          <div class="section-heading">
-            <h2>奧林匹克</h2>
-            <span>本洞獎牌</span>
-          </div>
-          <div class="olympic-list" id="olympicList"></div>
-        </section>
-
         <section class="section-block">
           <div class="section-heading">
             <h2 id="sideGameTitle">HL</h2>
@@ -214,7 +213,7 @@
         </div>
         <div class="stepper">
           <button type="button" data-delta="-1" aria-label="減一">−</button>
-          <output></output>
+          <input type="number" min="0" inputmode="numeric" aria-label="桿數" />
           <button type="button" data-delta="1" aria-label="加一">+</button>
         </div>
       </article>
