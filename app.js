@@ -52,16 +52,22 @@ const COURSES = [
 ];
 
 const DEFAULT_STATE = {
+  match: { name: "", date: "", time: "" },
   courseId: "taiwan-golf",
   frontZoneId: "front",
   backZoneId: "back",
   currentHole: 0,
   players: [
-    { id: "p1", name: "A", mode: "fixed", handicap: 18 },
-    { id: "p2", name: "B", mode: "fixed", handicap: 18 },
-    { id: "p3", name: "C", mode: "peoria", handicap: 0 },
-    { id: "p4", name: "", mode: "fixed", handicap: 18 }
+    { id: "p1", name: "A", mode: "fixed", handicap: 0 },
+    { id: "p2", name: "B", mode: "fixed", handicap: 0 },
+    { id: "p3", name: "C", mode: "fixed", handicap: 0 },
+    { id: "p4", name: "D", mode: "fixed", handicap: 0 }
   ],
+  money: { skins: 50, stroke: 40, putting: 20, snake: 100, hl: 300, hussein: 50 },
+  sideGame: "hl",
+  teeOrder: [],
+  husseinOwner: "",
+  holeHcp: {},
   scores: {},
   olympic: {},
   snake: { bank: 0, trigger: 4, big: {}, history: [] },
@@ -69,6 +75,12 @@ const DEFAULT_STATE = {
 };
 
 let state = loadState();
+state.match = { ...DEFAULT_STATE.match, ...(state.match || {}) };
+state.money = { ...DEFAULT_STATE.money, ...(state.money || {}) };
+state.sideGame = state.sideGame || "hl";
+state.teeOrder = Array.isArray(state.teeOrder) ? state.teeOrder : [];
+state.husseinOwner = state.husseinOwner || "";
+state.holeHcp = state.holeHcp || {};
 state.snake = { bank: 0, trigger: 4, big: {}, history: [], ...(state.snake || {}) };
 state.snake.trigger = Math.max(2, Math.min(4, Number(state.snake.trigger) || 4));
 state.snake.history = Array.isArray(state.snake.history) ? state.snake.history : [];
@@ -107,6 +119,7 @@ function zoneById(id) {
 function roundHoles() {
   return [...zoneById(state.frontZoneId).holes, ...zoneById(state.backZoneId).holes].map((hole, index) => ({
     ...hole,
+    hcp: Number(state.holeHcp[index]) || hole.hcp || index + 1,
     roundNo: index + 1,
     zoneName: index < 9 ? zoneById(state.frontZoneId).name : zoneById(state.backZoneId).name
   }));
@@ -151,41 +164,97 @@ function netTotal(playerId, through = 18) {
 function netHoleScore(player, holeIndex) {
   const gross = scoreFor(player.id, holeIndex);
   if (!gross) return 0;
-  const holeShare = Math.floor(playerHandicap(player) / 18);
-  const extra = holeIndex < playerHandicap(player) % 18 ? 1 : 0;
-  return gross - holeShare - extra;
+  return gross - courseStrokeAllowance(player, holeIndex);
+}
+
+function courseStrokeAllowance(player, holeIndex) {
+  const players = activePlayers();
+  const minHandicap = Math.min(...players.map((item) => playerHandicap(item)));
+  const allowance = Math.floor(Math.max(0, playerHandicap(player) - minHandicap) / 3);
+  if (!allowance) return 0;
+  const hcp = roundHoles()[holeIndex]?.hcp || holeIndex + 1;
+  return hcp <= allowance ? 1 : 0;
 }
 
 function skinsScores() {
   const players = activePlayers();
   const totals = Object.fromEntries(players.map((player) => [player.id, 0]));
-  roundHoles().forEach((_, holeIndex) => {
+  let carry = 0;
+  roundHoles().forEach((hole, holeIndex) => {
     const played = players.filter((player) => scoreFor(player.id, holeIndex) > 0);
     if (played.length < 2) return;
     const values = played.map((player) => ({
       player,
-      value: state.skinsMode === "net" ? netHoleScore(player, holeIndex) : scoreFor(player.id, holeIndex)
+      value: netHoleScore(player, holeIndex),
+      gross: scoreFor(player.id, holeIndex)
     }));
     const best = Math.min(...values.map((item) => item.value));
     const winners = values.filter((item) => item.value === best);
-    if (winners.length !== 1) return;
-    const winnerId = winners[0].player.id;
+    if (winners.length !== 1) {
+      carry += Number(state.money.skins) || 0;
+      return;
+    }
+    const winner = winners[0];
+    if (winner.gross > hole.par + 1) {
+      carry += Number(state.money.skins) || 0;
+      return;
+    }
+    const multiplier = winner.gross <= hole.par - 2 ? 5 : winner.gross === hole.par - 1 ? 2 : 1;
+    const payout = carry + (Number(state.money.skins) || 0) * multiplier;
+    carry = 0;
+    const winnerId = winner.player.id;
     played.forEach((player) => {
-      totals[player.id] += player.id === winnerId ? played.length - 1 : -1;
+      totals[player.id] += player.id === winnerId ? payout * (played.length - 1) : -payout;
     });
   });
   return totals;
 }
 
-function olympicTotal(playerId) {
-  return Object.values(state.olympic[playerId] || {}).reduce((sum, value) => sum + value, 0);
+function skinsCarry() {
+  const players = activePlayers();
+  let carry = 0;
+  roundHoles().forEach((hole, holeIndex) => {
+    const played = players.filter((player) => scoreFor(player.id, holeIndex) > 0);
+    if (played.length < 2) return;
+    const values = played.map((player) => ({ player, value: netHoleScore(player, holeIndex), gross: scoreFor(player.id, holeIndex) }));
+    const best = Math.min(...values.map((item) => item.value));
+    const winners = values.filter((item) => item.value === best);
+    if (winners.length !== 1 || winners[0].gross > hole.par + 1) {
+      carry += Number(state.money.skins) || 0;
+    } else {
+      carry = 0;
+    }
+  });
+  return carry;
+}
+
+function strokeScores() {
+  const players = activePlayers();
+  const nets = Object.fromEntries(players.map((player) => [player.id, netTotal(player.id)]));
+  const totals = Object.fromEntries(players.map((player) => [player.id, 0]));
+  players.forEach((player) => {
+    players.forEach((opponent) => {
+      if (player.id === opponent.id) return;
+      totals[player.id] += (nets[opponent.id] - nets[player.id]) * (Number(state.money.stroke) || 0);
+    });
+  });
+  return totals;
+}
+
+function olympicMedalFor(playerId, holeIndex) {
+  return state.olympic[playerId]?.[holeIndex] || "";
+}
+
+function olympicCounts(playerId) {
+  const counts = { diamond: 0, gold: 0, silver: 0, bronze: 0, iron: 0 };
+  Object.values(state.olympic[playerId] || {}).forEach((medal) => {
+    if (counts[medal] !== undefined) counts[medal] += 1;
+  });
+  return counts;
 }
 
 function olympicNetScores() {
-  const players = activePlayers();
-  const raw = Object.fromEntries(players.map((player) => [player.id, olympicTotal(player.id)]));
-  const total = Object.values(raw).reduce((sum, value) => sum + value, 0);
-  return Object.fromEntries(players.map((player) => [player.id, raw[player.id] * players.length - total]));
+  return Object.fromEntries(activePlayers().map((player) => [player.id, 0]));
 }
 
 function render() {
@@ -210,6 +279,12 @@ function renderTabs() {
 }
 
 function renderSetup() {
+  $("#matchName").value = state.match.name || "";
+  $("#matchDate").value = state.match.date || "";
+  $("#matchTime").value = state.match.time || "";
+  $("#sideGameSelect").value = state.sideGame;
+  $("#snakeTriggerSetup").value = String(state.snake.trigger);
+
   const players = $("#playerInputs");
   players.innerHTML = "";
   state.players.forEach((player, index) => {
@@ -234,11 +309,14 @@ function renderSetup() {
     const selected = course();
     state.frontZoneId = selected.zones[0].id;
     state.backZoneId = selected.zones[1]?.id || selected.zones[0].id;
+    state.holeHcp = {};
     saveAndRender();
   };
   $("#courseMeta").textContent = course().type === "multi" ? `${course().zones.length * 9} 洞多區` : "標準 18 洞";
   renderRoutePicker();
+  renderHcpEditor();
   renderHandicaps();
+  renderMoneyInputs();
 }
 
 function renderRoutePicker() {
@@ -261,6 +339,7 @@ function renderRoutePicker() {
       button.classList.toggle("is-active", state[key] === zone.id);
       button.addEventListener("click", () => {
         state[key] = zone.id;
+        state.holeHcp = {};
         saveAndRender();
       });
       segmented.append(button);
@@ -279,27 +358,68 @@ function renderHandicaps() {
     card.innerHTML = `
       <div>
         <h3>${escapeHtml(player.name)}</h3>
-        <p>${player.mode === "peoria" ? "新新貝利亞，18 洞後計算" : `固定差點 ${player.handicap}`}</p>
+        <p>逐洞賽以最低差點為基準讓洞</p>
       </div>
       <div class="handicap-controls">
-        <button class="mode-button" type="button" data-mode="toggle">${player.mode === "peoria" ? "改固定" : "新新"}</button>
         <div class="stepper" aria-label="${escapeHtml(player.name)} 差點">
           <button type="button" data-delta="-1">−</button>
-          <output>${player.mode === "peoria" ? playerHandicap(player) : player.handicap}</output>
+          <output>${player.handicap}</output>
           <button type="button" data-delta="1">+</button>
         </div>
       </div>
     `;
-    card.querySelector("[data-mode]").addEventListener("click", () => {
-      player.mode = player.mode === "peoria" ? "fixed" : "peoria";
-      saveAndRender();
-    });
     card.querySelectorAll("[data-delta]").forEach((button) => button.addEventListener("click", () => {
       player.mode = "fixed";
       player.handicap = Math.max(0, Math.min(36, (Number(player.handicap) || 0) + Number(button.dataset.delta)));
       saveAndRender();
     }));
     wrapper.append(card);
+  });
+}
+
+function renderHcpEditor() {
+  const wrapper = $("#hcpEditor");
+  const holes = roundHoles();
+  wrapper.innerHTML = holes
+    .map((hole, index) => `
+      <label>
+        <span>${index + 1} 洞</span>
+        <input type="number" min="1" max="18" value="${hole.hcp}" data-hole-hcp="${index}" />
+      </label>
+    `)
+    .join("");
+  wrapper.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("change", () => {
+      state.holeHcp[input.dataset.holeHcp] = Math.max(1, Math.min(18, Number(input.value) || Number(input.dataset.holeHcp) + 1));
+      saveAndRender();
+    });
+  });
+}
+
+function renderMoneyInputs() {
+  const labels = [
+    ["skins", "逐洞賽", "元/洞"],
+    ["stroke", "比桿賽", "元/桿"],
+    ["putting", "推桿賽", "元/點"],
+    ["snake", "抓蛇", "元/條"],
+    ["hl", "HL", "元/round"],
+    ["hussein", "海珊", "元/點"]
+  ];
+  const wrapper = $("#moneyInputs");
+  wrapper.innerHTML = labels
+    .map(([key, label, unit]) => `
+      <label class="field">
+        <span>${label} ${unit}</span>
+        <input type="number" min="0" inputmode="numeric" value="${state.money[key]}" data-money="${key}" />
+      </label>
+    `)
+    .join("");
+  wrapper.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("change", () => {
+      state.money[input.dataset.money] = Math.max(0, Number(input.value) || 0);
+      saveState();
+      renderSummary();
+    });
   });
 }
 
@@ -350,7 +470,6 @@ function renderScoreTable() {
 }
 
 function renderGames() {
-  $("#skinsMode").value = state.skinsMode;
   const skins = skinsScores();
   const board = $("#skinsBoard");
   board.innerHTML = "";
@@ -358,11 +477,11 @@ function renderGames() {
     const value = skins[player.id] || 0;
     const row = document.createElement("div");
     row.className = "leader-row";
-    row.innerHTML = `<strong>${escapeHtml(player.name)}</strong><output class="${value > 0 ? "positive" : value < 0 ? "negative" : ""}">${formatSigned(value)}</output>`;
+    row.innerHTML = `<strong>${escapeHtml(player.name)}</strong><output class="${value > 0 ? "positive" : value < 0 ? "negative" : ""}">${formatMoney(value)}</output>`;
     board.append(row);
   });
   const skinsSum = Object.values(skins).reduce((sum, value) => sum + value, 0);
-  $("#skinsZero").textContent = `目前已結算總和：${skinsSum}`;
+  $("#skinsZero").textContent = `目前已結算總和：${formatMoney(skinsSum)} · 保留 ${formatMoney(skinsCarry())}`;
 
   $("#snakeTrigger").value = String(state.snake.trigger);
   $("#undoSnake").disabled = state.snake.history.length === 0;
@@ -385,22 +504,25 @@ function renderGames() {
   activePlayers().forEach((player) => {
     const card = document.createElement("article");
     card.className = "counter-card";
-    const holeValue = state.olympic[player.id]?.[state.currentHole] || 0;
+    const medal = olympicMedalFor(player.id, state.currentHole);
+    const counts = olympicCounts(player.id);
     card.innerHTML = `
-      <div><h3>${escapeHtml(player.name)}</h3><p>本洞 ${formatSigned(holeValue)} · 累計 ${formatSigned(olympicTotal(player.id))}</p></div>
+      <div><h3>${escapeHtml(player.name)}</h3><p>${medal ? `本洞 ${medalLabel(medal)}` : "本洞不選"} · 鑽${counts.diamond} 金${counts.gold} 銀${counts.silver} 銅${counts.bronze} 鐵${counts.iron}</p></div>
       <div class="olympic-buttons">
-        ${[-2, -1, 1, 2, 4].map((delta) => `<button type="button" data-delta="${delta}">${formatSigned(delta)}</button>`).join("")}
+        ${["", "diamond", "gold", "silver", "bronze", "iron"].map((item) => `<button class="${medal === item ? "is-active" : ""}" type="button" data-medal="${item}">${item ? medalLabel(item) : "不選"}</button>`).join("")}
       </div>
     `;
     card.querySelectorAll("button").forEach((button) => {
-      button.addEventListener("click", () => addOlympic(player.id, Number(button.dataset.delta)));
+      button.addEventListener("click", () => setOlympic(player.id, button.dataset.medal));
     });
     olympic.append(card);
   });
+  renderSideGame();
 }
 
 function renderSummary() {
-  $("#summaryCourse").textContent = `${course().name} · ${zoneById(state.frontZoneId).name} + ${zoneById(state.backZoneId).name}`;
+  const matchLabel = state.match.name ? `${state.match.name} · ` : "";
+  $("#summaryCourse").textContent = `${matchLabel}${course().name} · ${zoneById(state.frontZoneId).name} + ${zoneById(state.backZoneId).name}`;
   const summary = $("#summaryList");
   summary.innerHTML = "";
   activePlayers()
@@ -414,22 +536,208 @@ function renderSummary() {
     });
 
   const skins = skinsScores();
-  const olympic = olympicNetScores();
+  const stroke = strokeScores();
   const grid = $("#settlementGrid");
   grid.innerHTML = "";
   activePlayers().forEach((player) => {
     const snakeLoss = state.snake.big[player.id] || 0;
+    const counts = olympicCounts(player.id);
     const card = document.createElement("article");
     card.className = "settlement-card";
     card.innerHTML = `
       <div>
         <h3>${escapeHtml(player.name)}</h3>
-        <p>逐洞 ${formatSigned(skins[player.id] || 0)} · 奧林匹克 ${formatSigned(olympic[player.id] || 0)} · 大蛇 ${snakeLoss}</p>
+        <p>逐洞 ${formatMoney(skins[player.id] || 0)} · 比桿 ${formatMoney(stroke[player.id] || 0)} · 大蛇 ${snakeLoss}</p>
+        <p>奧林匹克：鑽${counts.diamond} 金${counts.gold} 銀${counts.silver} 銅${counts.bronze} 鐵${counts.iron}</p>
       </div>
-      <strong class="${(skins[player.id] || 0) + (olympic[player.id] || 0) - snakeLoss > 0 ? "positive" : "negative"}">${formatSigned((skins[player.id] || 0) + (olympic[player.id] || 0) - snakeLoss)}</strong>
+      <strong class="${(skins[player.id] || 0) + (stroke[player.id] || 0) - snakeLoss * (Number(state.money.snake) || 0) > 0 ? "positive" : "negative"}">${formatMoney((skins[player.id] || 0) + (stroke[player.id] || 0) - snakeLoss * (Number(state.money.snake) || 0))}</strong>
     `;
     grid.append(card);
   });
+}
+
+function renderSideGame() {
+  const players = activePlayers();
+  $("#sideGameTitle").textContent = state.sideGame === "hussein" ? "海珊" : "HL";
+  $("#sideGameMeta").textContent = state.sideGame === "hussein" ? "三人競賽" : "四人競賽";
+  if (state.sideGame === "hussein") {
+    renderHussein(players);
+  } else {
+    renderHL(players);
+  }
+}
+
+function renderHL(players) {
+  const panel = $("#sideGamePanel");
+  if (players.length !== 4) {
+    panel.innerHTML = `<p class="muted-text">HL 需要 4 位球員，目前為 ${players.length} 位。</p>`;
+    return;
+  }
+  const order = normalizedOrder(players, 4);
+  const roundIndex = Math.floor(state.currentHole / 6);
+  const pairings = hlPairings(order, roundIndex);
+  const result = hlRoundResult(players, order, roundIndex);
+  panel.innerHTML = `
+    ${orderEditor(order, 4, "HL 開球排序")}
+    <div class="zero-check">目前組合：${pairLabel(pairings[0])} vs ${pairLabel(pairings[1])}</div>
+    <table class="mini-table">
+      <thead><tr><th>輪次</th><th>洞數</th><th>得分</th></tr></thead>
+      <tbody>
+        ${[0, 1, 2].map((index) => {
+          const item = hlRoundResult(players, order, index);
+          return `<tr><td>第 ${index + 1} 輪</td><td>${index * 6 + 1}-${index * 6 + 6}</td><td>${item.a}-${item.b}</td></tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+    <p class="muted-text">本輪 ${result.a === result.b ? "暫時平手" : result.a > result.b ? `${pairLabel(pairings[0])} 領先` : `${pairLabel(pairings[1])} 領先`}，每輪 ${formatMoney(Number(state.money.hl) || 0)}。</p>
+  `;
+  bindOrderEditor(panel);
+}
+
+function renderHussein(players) {
+  const panel = $("#sideGamePanel");
+  if (players.length !== 3) {
+    panel.innerHTML = `<p class="muted-text">海珊只適用 3 位球員，目前為 ${players.length} 位。</p>`;
+    return;
+  }
+  const order = normalizedOrder(players, 3);
+  const ownerId = husseinOwnerForHole(players) || order[0];
+  const ordered = [ownerId, ...order.filter((id) => id !== ownerId)];
+  const husseinId = ordered[1];
+  const teamIds = [ordered[0], ordered[2]];
+  const rows = husseinRows(players, order);
+  panel.innerHTML = `
+    ${orderEditor(order, 3, "海珊初始排序")}
+    <label class="field">
+      <span>第一洞無法判斷時的 Owner</span>
+      <select id="husseinOwner">${players.map((player) => `<option value="${player.id}" ${player.id === ownerId ? "selected" : ""}>${escapeHtml(player.name)}</option>`).join("")}</select>
+    </label>
+    <div class="zero-check">目前 Owner：${playerName(ownerId)} · 海珊：${playerName(husseinId)} · 對手：${teamIds.map(playerName).join("+")}</div>
+    <table class="mini-table">
+      <thead><tr><th>洞</th><th>結果</th><th>保留</th></tr></thead>
+      <tbody>${rows.map((row) => `<tr><td>${row.hole}</td><td>${row.label}</td><td>${row.carry}</td></tr>`).join("")}</tbody>
+    </table>
+  `;
+  bindOrderEditor(panel);
+  $("#husseinOwner").addEventListener("change", (event) => {
+    state.husseinOwner = event.target.value;
+    saveAndRender();
+  });
+}
+
+function normalizedOrder(players, size) {
+  const ids = players.map((player) => player.id);
+  const existing = state.teeOrder.filter((id) => ids.includes(id));
+  const merged = [...existing, ...ids.filter((id) => !existing.includes(id))].slice(0, size);
+  state.teeOrder = merged;
+  return merged;
+}
+
+function orderEditor(order, size, title) {
+  return `
+    <div class="setup-grid order-editor">
+      ${Array.from({ length: size }, (_, index) => `
+        <label class="field">
+          <span>${title} ${ordinal(index + 1)}</span>
+          <select data-order-index="${index}">
+            ${activePlayers().map((player) => `<option value="${player.id}" ${order[index] === player.id ? "selected" : ""}>${escapeHtml(player.name)}</option>`).join("")}
+          </select>
+        </label>
+      `).join("")}
+    </div>
+  `;
+}
+
+function bindOrderEditor(panel) {
+  panel.querySelectorAll("[data-order-index]").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.teeOrder[Number(select.dataset.orderIndex)] = select.value;
+      saveAndRender();
+    });
+  });
+}
+
+function hlPairings(order, roundIndex) {
+  const pairs = [
+    [[order[0], order[3]], [order[1], order[2]]],
+    [[order[0], order[2]], [order[1], order[3]]],
+    [[order[0], order[1]], [order[2], order[3]]]
+  ];
+  return pairs[Math.min(2, roundIndex)] || pairs[0];
+}
+
+function hlRoundResult(players, order, roundIndex) {
+  const [teamA, teamB] = hlPairings(order, roundIndex);
+  const result = { a: 0, b: 0 };
+  for (let index = roundIndex * 6; index < roundIndex * 6 + 6; index += 1) {
+    const aScores = teamA.map((id) => scoreFor(id, index)).filter(Boolean).sort((a, b) => a - b);
+    const bScores = teamB.map((id) => scoreFor(id, index)).filter(Boolean).sort((a, b) => a - b);
+    if (aScores.length < 2 || bScores.length < 2) continue;
+    if (aScores[0] < bScores[0]) result.a += 1;
+    if (bScores[0] < aScores[0]) result.b += 1;
+    if (aScores[1] < bScores[1]) result.a += 1;
+    if (bScores[1] < aScores[1]) result.b += 1;
+  }
+  return result;
+}
+
+function husseinOwnerForHole(players) {
+  if (state.currentHole === 0) return state.husseinOwner || players[0]?.id;
+  for (let index = state.currentHole - 1; index >= 0; index -= 1) {
+    const scored = players.map((player) => ({ player, score: scoreFor(player.id, index) })).filter((item) => item.score > 0);
+    if (scored.length !== players.length) continue;
+    const best = Math.min(...scored.map((item) => item.score));
+    const winners = scored.filter((item) => item.score === best);
+    if (winners.length === 1) return winners[0].player.id;
+  }
+  return state.husseinOwner || players[0]?.id;
+}
+
+function husseinRows(players, order) {
+  let carry = 0;
+  return roundHoles().map((_, index) => {
+    const owner = index === 0 ? (state.husseinOwner || order[0]) : ownerFromPrevious(players, index) || state.husseinOwner || order[0];
+    const ordered = [owner, ...order.filter((id) => id !== owner)];
+    const husseinId = ordered[1];
+    const teamIds = [ordered[0], ordered[2]];
+    const husseinScore = scoreFor(husseinId, index);
+    const teamScore = teamIds.reduce((sum, id) => sum + scoreFor(id, index), 0);
+    if (!husseinScore || teamIds.some((id) => !scoreFor(id, index))) {
+      return { hole: index + 1, label: "-", carry };
+    }
+    const husseinCompare = husseinScore * 2;
+    if (husseinCompare === teamScore) {
+      carry += 2;
+      return { hole: index + 1, label: "平手", carry };
+    }
+    const label = husseinCompare < teamScore ? `海珊 ${playerName(husseinId)} 勝` : `${teamIds.map(playerName).join("+")} 勝`;
+    const paid = 2 + carry;
+    carry = 0;
+    return { hole: index + 1, label: `${label} ${paid} 點`, carry };
+  });
+}
+
+function ownerFromPrevious(players, holeIndex) {
+  for (let index = holeIndex - 1; index >= 0; index -= 1) {
+    const scored = players.map((player) => ({ player, score: scoreFor(player.id, index) })).filter((item) => item.score > 0);
+    if (scored.length !== players.length) continue;
+    const best = Math.min(...scored.map((item) => item.score));
+    const winners = scored.filter((item) => item.score === best);
+    if (winners.length === 1) return winners[0].player.id;
+  }
+  return "";
+}
+
+function pairLabel(ids) {
+  return ids.map(playerName).join("+");
+}
+
+function ordinal(value) {
+  return ["1st", "2nd", "3rd", "4th"][value - 1] || `${value}`;
+}
+
+function playerName(id) {
+  return state.players.find((player) => player.id === id)?.name || "-";
 }
 
 function counterCard(name, detail, value, onChange) {
@@ -468,14 +776,39 @@ function undoSnake() {
   saveAndRender();
 }
 
-function addOlympic(playerId, delta) {
+function updateSnakeTrigger(value) {
+  state.snake.trigger = Math.max(2, Math.min(4, Number(value) || 4));
+  state.snake.bank = Math.min(state.snake.bank, state.snake.trigger - 1);
+  state.snake.history = [];
+  saveAndRender();
+}
+
+function setOlympic(playerId, medal) {
   state.olympic[playerId] = state.olympic[playerId] || {};
-  state.olympic[playerId][state.currentHole] = (state.olympic[playerId][state.currentHole] || 0) + delta;
+  if (medal) {
+    state.olympic[playerId][state.currentHole] = medal;
+  } else {
+    delete state.olympic[playerId][state.currentHole];
+  }
   saveAndRender();
 }
 
 function formatSigned(value) {
   return value > 0 ? `+${value}` : `${value}`;
+}
+
+function formatMoney(value) {
+  return `${value > 0 ? "+" : ""}${value}元`;
+}
+
+function medalLabel(value) {
+  return {
+    diamond: "鑽",
+    gold: "金",
+    silver: "銀",
+    bronze: "銅",
+    iron: "鐵"
+  }[value] || "不選";
 }
 
 function escapeHtml(value) {
@@ -502,15 +835,27 @@ function bindEvents() {
     const par = roundHoles()[state.currentHole].par;
     activePlayers().forEach((player) => setScore(player.id, state.currentHole, scoreFor(player.id, state.currentHole) || par));
   });
-  $("#skinsMode").addEventListener("change", (event) => {
-    state.skinsMode = event.target.value;
+  $("#matchName").addEventListener("input", (event) => {
+    state.match.name = event.target.value.slice(0, 24);
+    saveState();
+  });
+  $("#matchDate").addEventListener("change", (event) => {
+    state.match.date = event.target.value;
+    saveState();
+  });
+  $("#matchTime").addEventListener("change", (event) => {
+    state.match.time = event.target.value;
+    saveState();
+  });
+  $("#sideGameSelect").addEventListener("change", (event) => {
+    state.sideGame = event.target.value;
     saveAndRender();
   });
+  $("#snakeTriggerSetup").addEventListener("change", (event) => {
+    updateSnakeTrigger(Number(event.target.value));
+  });
   $("#snakeTrigger").addEventListener("change", (event) => {
-    state.snake.trigger = Number(event.target.value);
-    state.snake.bank = Math.min(state.snake.bank, state.snake.trigger - 1);
-    state.snake.history = [];
-    saveAndRender();
+    updateSnakeTrigger(Number(event.target.value));
   });
   $("#undoSnake").addEventListener("click", undoSnake);
   $("#resetRound").addEventListener("click", () => {

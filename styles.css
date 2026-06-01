@@ -177,6 +177,7 @@ h3 {
 }
 
 .player-grid,
+.setup-grid,
 .handicap-list,
 .score-counters,
 .olympic-list,
@@ -187,6 +188,10 @@ h3 {
 }
 
 .player-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setup-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -223,6 +228,44 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfcfa;
+}
+
+.details-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+  padding: 12px;
+}
+
+.details-panel summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.hcp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hcp-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hcp-grid input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .segmented {
@@ -271,6 +314,11 @@ select {
   color: var(--muted);
   font-size: 14px;
   margin-top: 3px;
+}
+
+.muted-text {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .stepper {
@@ -434,9 +482,8 @@ select {
 }
 
 .olympic-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
   gap: 6px;
 }
 
@@ -458,13 +505,41 @@ select {
 }
 
 .olympic-buttons button {
-  min-width: 48px;
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f1f6fb;
   color: var(--blue);
   font-weight: 900;
+}
+
+.olympic-buttons button.is-active {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.side-game-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mini-table th,
+.mini-table td {
+  padding: 9px 6px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  font-size: 14px;
+}
+
+.mini-table td:last-child,
+.mini-table th:last-child {
+  text-align: right;
 }
 
 .summary-card strong,
@@ -490,6 +565,7 @@ select {
   }
 
   .route-picker,
+  .setup-grid,
   .settlement-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -502,6 +578,7 @@ select {
 
 @media (max-width: 390px) {
   .player-grid,
+  .setup-grid,
   .route-picker,
   .snake-tools,
   .snake-actions {

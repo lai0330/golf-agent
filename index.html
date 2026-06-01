@@ -34,6 +34,41 @@
       <section class="view is-active" id="view-setup">
         <section class="section-block">
           <div class="section-heading">
+            <h2>比賽資訊</h2>
+          </div>
+          <div class="setup-grid">
+            <label class="field">
+              <span>比賽名稱</span>
+              <input id="matchName" placeholder="例：週末友誼賽" />
+            </label>
+            <label class="field">
+              <span>比賽日期</span>
+              <input id="matchDate" type="date" />
+            </label>
+            <label class="field">
+              <span>比賽時間</span>
+              <input id="matchTime" type="time" />
+            </label>
+            <label class="field">
+              <span>HL / 海珊</span>
+              <select id="sideGameSelect">
+                <option value="hl">HL</option>
+                <option value="hussein">海珊</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>大蛇選擇</span>
+              <select id="snakeTriggerSetup">
+                <option value="2">第 2 隻小蛇</option>
+                <option value="3">第 3 隻小蛇</option>
+                <option value="4">第 4 隻小蛇</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
             <h2>球員</h2>
             <span id="playerCountLabel">4 人</span>
           </div>
@@ -50,13 +85,24 @@
             <select id="courseSelect"></select>
           </label>
           <div class="route-picker" id="routePicker"></div>
+          <details class="details-panel">
+            <summary>人工調整每洞難度排序</summary>
+            <div class="hcp-grid" id="hcpEditor"></div>
+          </details>
         </section>
 
         <section class="section-block">
           <div class="section-heading">
-            <h2>計分方式</h2>
+            <h2>球員差點</h2>
           </div>
           <div class="handicap-list" id="handicapList"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2>獎金設定</h2>
+          </div>
+          <div class="setup-grid" id="moneyInputs"></div>
         </section>
       </section>
 
@@ -94,10 +140,7 @@
         <section class="section-block">
           <div class="section-heading">
             <h2>逐洞賽看板</h2>
-            <select id="skinsMode" aria-label="逐洞賽計算方式">
-              <option value="gross">總桿</option>
-              <option value="net">淨桿</option>
-            </select>
+            <span>讓洞後淨桿</span>
           </div>
           <div class="leaderboard" id="skinsBoard"></div>
           <div class="zero-check" id="skinsZero">目前已結算總和：0</div>
@@ -126,9 +169,17 @@
         <section class="section-block">
           <div class="section-heading">
             <h2>奧林匹克</h2>
-            <span>本洞加減點</span>
+            <span>本洞獎牌</span>
           </div>
           <div class="olympic-list" id="olympicList"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <h2 id="sideGameTitle">HL</h2>
+            <span id="sideGameMeta"></span>
+          </div>
+          <div class="side-game-panel" id="sideGamePanel"></div>
         </section>
       </section>
 
